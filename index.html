@@ -1,0 +1,247 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ChickenAI - 鶏肉レシピコンシェルジュ</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;700;900&display=swap" rel="stylesheet">
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <style>
+        body {
+            font-family: 'Noto Sans JP', sans-serif;
+            background-color: #FDFCF8;
+        }
+        .animate-fade-in { animation: fadeIn 0.5s ease-out forwards; }
+        @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+        .recipe-card:hover { transform: translateY(-4px); transition: all 0.3s ease; }
+    </style>
+</head>
+<body class="text-gray-800 antialiased pb-20">
+
+    <!-- Header -->
+    <header class="bg-white/90 backdrop-blur-md sticky top-0 z-50 border-b border-orange-50 px-6 py-4 shadow-sm">
+        <div class="container mx-auto flex items-center justify-between">
+            <div onclick="resetApp()" class="font-black text-orange-600 flex items-center gap-2 text-2xl italic cursor-pointer active:scale-95 transition-transform">
+                <i data-lucide="chef-hat"></i> ChickenAI
+            </div>
+            <div id="step-indicator" class="hidden sm:flex items-center gap-2">
+                <div class="step-dot h-2 w-16 bg-orange-500 rounded-full"></div>
+                <div class="step-dot h-2 w-6 bg-gray-100 rounded-full"></div>
+                <div class="step-dot h-2 w-6 bg-gray-100 rounded-full"></div>
+            </div>
+            <button onclick="resetApp()" class="text-xs font-black bg-gray-100 px-4 py-2 rounded-full hover:bg-gray-200 transition-colors">リセット</button>
+        </div>
+    </header>
+
+    <main id="app-container" class="container mx-auto px-4 py-8">
+        <!-- Content will be injected here by JavaScript -->
+    </main>
+
+    <script>
+        // --- データ定義 ---
+        const MOODS = [
+            { id: 'hearty', label: 'ガッツリ', icon: '🍖', desc: '白飯をかきこみたい' },
+            { id: 'light', label: 'さっぱり', icon: '🥗', desc: '胃に優しくヘルシーに' },
+            { id: 'quick', label: '時短・簡単', icon: '⚡', desc: '10分で作りたい' },
+            { id: 'snack', label: 'おつまみ', icon: '🍺', desc: 'お酒に合う味' },
+        ];
+
+        const INGREDIENTS = [
+            { id: 'onion', label: '玉ねぎ' },
+            { id: 'egg', label: '卵' },
+            { id: 'leek', label: '長ネギ' },
+            { id: 'potato', label: 'じゃがいも' },
+            { id: 'cheese', label: 'チーズ' },
+            { id: 'cabbage', label: 'キャベツ' },
+            { id: 'mushroom', label: 'きのこ類' },
+            { id: 'tomato', label: 'トマト' },
+            { id: 'bean-sprouts', label: 'もやし' },
+            { id: 'carrot', label: 'にんじん' },
+            { id: 'green-pepper', label: 'ピーマン' },
+        ];
+
+        const RECIPES = [
+            { id: 1, title: '至高の親子丼', part: 'もも肉', moods: ['hearty', 'quick'], ingredients: ['onion', 'egg'], time: '12分', calories: '650kcal', imageEmoji: '🍚', appeal: '加熱しても固くなりにくい、もも肉のプリプリ感を堪能して。', searchUrl: 'https://www.kurashiru.com/search?query=' + encodeURIComponent('親子丼 鶏もも肉 玉ねぎ 卵') },
+            { id: 2, title: '鶏キャベツの回鍋肉風', part: 'もも肉', moods: ['hearty'], ingredients: ['cabbage', 'green-pepper'], time: '15分', calories: '480kcal', imageEmoji: '🥘', appeal: 'キャベツは手でちぎると味が染み込みやすくなります。', searchUrl: 'https://cookpad.com/search/' + encodeURIComponent('鶏もも肉 キャベツ 回鍋肉') },
+            { id: 3, title: 'とろ〜りチーズタッカルビ', part: 'もも肉', moods: ['hearty', 'snack'], ingredients: ['cabbage', 'cheese', 'onion'], time: '20分', calories: '720kcal', imageEmoji: '🧀', appeal: 'キャベツの芯に近い部分は薄切りにすると火通りが均一になります。', searchUrl: 'https://delishkitchen.tv/search?q=' + encodeURIComponent('チーズタッカルビ 鶏もも肉') },
+            { id: 4, title: '鶏もも肉のねぎ塩焼き', part: 'もも肉', moods: ['snack', 'quick'], ingredients: ['leek'], time: '10分', calories: '380kcal', imageEmoji: '🥢', appeal: 'レモン汁を最後にかけると、ねぎの甘みが引き立ちます。', searchUrl: 'https://www.kurashiru.com/search?query=' + encodeURIComponent('鶏もも肉 ねぎ塩焼き') },
+            { id: 21, title: '鶏むね肉のガリバタポン炒め', part: 'むね肉', moods: ['hearty', 'quick'], ingredients: ['cabbage', 'mushroom'], time: '12分', calories: '320kcal', imageEmoji: '🧄', appeal: 'むね肉は予熱で火を通すと、驚くほど柔らかく仕上がります。', searchUrl: 'https://www.kurashiru.com/search?query=' + encodeURIComponent('鶏むね肉 キャベツ バターポン酢') },
+            { id: 22, title: 'よだれ鶏風ピリ辛もやし', part: 'むね肉', moods: ['snack', 'light'], ingredients: ['bean-sprouts', 'leek'], time: '10分', calories: '240kcal', imageEmoji: '🔥', appeal: 'レンジ調理で油を使わず、究極にヘルシー。', searchUrl: 'https://cookpad.com/search/' + encodeURIComponent('鶏むね肉 もやし よだれ鶏') },
+            { id: 23, title: '鶏むね肉のオーロラ和え', part: 'むね肉', moods: ['hearty'], ingredients: ['potato', 'carrot'], time: '18分', calories: '450kcal', imageEmoji: '🍅', appeal: 'ケチャップとマヨのコクで、むね肉がご馳走に。', searchUrl: 'https://delishkitchen.tv/search?q=' + encodeURIComponent('鶏むね肉 オーロラソース') },
+            { id: 24, title: '蒸し鶏の和風トマト和え', part: 'むね肉', moods: ['light'], ingredients: ['tomato', 'onion'], time: '8分', calories: '190kcal', imageEmoji: '🥗', appeal: '玉ねぎは水にさらして辛味を抜くのがポイント。', searchUrl: 'https://www.lettuceclub.net/recipe/search/' + encodeURIComponent('鶏むね肉 トマト サラダ') + '/' },
+            { id: 31, title: '無限鶏もやしキャベツ', part: 'むね肉', moods: ['quick', 'snack'], ingredients: ['bean-sprouts', 'cabbage'], time: '7分', calories: '210kcal', imageEmoji: '🥢', appeal: '鶏ガラの素とごま油だけで、お箸が止まりません。', searchUrl: 'https://cookpad.com/search/' + encodeURIComponent('鶏肉 もやし キャベツ 無限') }
+        ];
+
+        // --- 状態管理 ---
+        let currentStep = 0;
+        let selectedMood = null;
+        let selectedIngredients = [];
+
+        // --- アプリ制御 ---
+        function render() {
+            const container = document.getElementById('app-container');
+            const indicatorDots = document.querySelectorAll('.step-dot');
+            
+            indicatorDots.forEach((dot, i) => {
+                if (currentStep >= i + 1) {
+                    dot.classList.remove('bg-gray-100', 'w-6');
+                    dot.classList.add('bg-orange-500', 'w-16');
+                } else {
+                    dot.classList.remove('bg-orange-500', 'w-16');
+                    dot.classList.add('bg-gray-100', 'w-6');
+                }
+            });
+
+            if (currentStep === 0) {
+                container.innerHTML = `
+                    <div class="flex flex-col items-center justify-center min-h-[70vh] text-center p-6 space-y-8 animate-fade-in">
+                        <div class="bg-orange-100 p-8 rounded-[40px] shadow-inner transform -rotate-3 transition-transform duration-500">
+                            <i data-lucide="chef-hat" class="w-20 h-20 text-orange-500"></i>
+                        </div>
+                        <div class="space-y-2">
+                            <h1 class="text-5xl font-black text-gray-900 tracking-tighter">ChickenAI</h1>
+                            <p class="text-gray-500 max-w-sm mx-auto leading-relaxed font-bold">冷蔵庫にあるものから、<br>今日の「正解レシピ」を導き出します。</p>
+                        </div>
+                        <button onclick="setStep(1)" class="bg-orange-600 hover:bg-orange-700 text-white font-bold py-5 px-16 rounded-full shadow-xl transition-all active:scale-95 flex items-center gap-3 text-lg group">
+                            献立を相談する <i data-lucide="arrow-right"></i>
+                        </button>
+                    </div>
+                `;
+            } else if (currentStep === 1) {
+                container.innerHTML = `
+                    <div class="p-6 max-w-2xl mx-auto animate-fade-in">
+                        <div class="text-center mb-10">
+                            <span class="text-orange-600 font-bold text-sm tracking-widest uppercase">Step 01 / Mood</span>
+                            <h2 class="text-3xl font-black text-gray-800 mt-2">今の気分は？</h2>
+                        </div>
+                        <div class="grid grid-cols-1 sm:grid-cols-2 gap-5">
+                            ${MOODS.map(mood => `
+                                <button onclick="selectMood('${mood.id}')" class="flex items-center p-6 bg-white border-2 border-gray-50 hover:border-orange-400 rounded-3xl shadow-sm hover:shadow-md transition-all group text-left">
+                                    <span class="text-5xl mr-5">${mood.icon}</span>
+                                    <div><span class="text-xl font-black text-gray-800 block">${mood.label}</span><span class="text-xs text-gray-400 font-bold">${mood.desc}</span></div>
+                                </button>
+                            `).join('')}
+                        </div>
+                    </div>
+                `;
+            } else if (currentStep === 2) {
+                container.innerHTML = `
+                    <div class="p-6 max-w-2xl mx-auto animate-fade-in">
+                        <div class="text-center mb-10">
+                            <span class="text-orange-600 font-bold text-sm tracking-widest uppercase">Step 02 / Ingredients</span>
+                            <h2 class="text-3xl font-black text-gray-800 mt-2">使う食材（オプション）</h2>
+                            <p class="text-gray-400 mt-2 text-sm font-bold">冷蔵庫にあるものを選んでください</p>
+                        </div>
+                        <div class="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-10">
+                            ${INGREDIENTS.map(ing => `
+                                <button onclick="toggleIngredient('${ing.id}')" class="p-4 rounded-2xl border-2 text-sm font-bold transition-all flex flex-col items-center gap-2 relative ${selectedIngredients.includes(ing.id) ? 'border-orange-500 bg-orange-50 text-orange-700' : 'border-gray-100 bg-white text-gray-500'}">
+                                    ${ing.label}
+                                </button>
+                            `).join('')}
+                        </div>
+                        <div class="flex flex-col sm:flex-row justify-center gap-4 items-center">
+                            <button onclick="setStep(1)" class="px-8 py-4 font-bold text-gray-400 hover:text-gray-600 transition">戻る</button>
+                            <button onclick="showResults()" class="bg-gray-900 text-white font-black py-5 px-16 rounded-full shadow-2xl hover:bg-black transition-all active:scale-95 w-full sm:w-auto text-center flex items-center justify-center gap-3">
+                                レシピを決定！ <i data-lucide="search"></i>
+                            </button>
+                        </div>
+                    </div>
+                `;
+            } else if (currentStep === 3) {
+                const results = getMatchedRecipes();
+                const best = results[0];
+                const others = results.slice(1, 4); // ほかの候補3つ
+
+                container.innerHTML = `
+                    <div class="p-4 sm:p-6 max-w-3xl mx-auto animate-fade-in space-y-12">
+                        <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+                            <h2 class="text-3xl font-black text-gray-900 flex items-center gap-2">AIの回答</h2>
+                            <button onclick="resetApp()" class="text-orange-600 font-bold flex items-center gap-2 border-2 border-orange-50 px-5 py-3 rounded-2xl"><i data-lucide="rotate-ccw" class="w-4 h-4"></i> 最初から</button>
+                        </div>
+
+                        <!-- ベストマッチ -->
+                        <div class="bg-white rounded-[40px] shadow-2xl overflow-hidden border-4 border-orange-500 p-8 sm:p-10 relative">
+                            <div class="absolute top-0 right-0 p-6"><span class="bg-orange-600 text-white text-[10px] font-black px-4 py-1.5 rounded-full">BEST MATCH</span></div>
+                            <div class="flex flex-col md:flex-row gap-8 items-center md:items-start">
+                                <div class="flex-shrink-0 bg-orange-50 w-32 h-32 sm:w-44 sm:h-44 rounded-[40px] flex items-center justify-center text-7xl shadow-inner border-4 border-white">${best.imageEmoji}</div>
+                                <div class="flex-grow">
+                                    <h3 class="text-3xl font-black text-gray-900 mb-3">${best.title}</h3>
+                                    <p class="text-orange-900 text-sm font-bold bg-orange-50 p-4 rounded-2xl mb-6">${best.appeal}</p>
+                                    <div class="grid grid-cols-2 gap-3 mb-8">
+                                        <div class="flex items-center gap-3 bg-gray-50 p-4 rounded-2xl"><i data-lucide="clock" class="text-orange-500 w-5 h-5"></i><span class="text-sm font-black">${best.time}</span></div>
+                                        <div class="flex items-center gap-3 bg-gray-50 p-4 rounded-2xl"><i data-lucide="flame" class="text-orange-500 w-5 h-5"></i><span class="text-sm font-black">${best.calories}</span></div>
+                                    </div>
+                                    <a href="${best.searchUrl}" target="_blank" class="w-full py-5 rounded-3xl font-black bg-gray-900 text-white hover:bg-black transition-all shadow-xl flex items-center justify-center gap-2">公式レシピを検索 <i data-lucide="external-link"></i></a>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- ほかの候補 3つ -->
+                        ${others.length > 0 ? `
+                        <div class="space-y-6">
+                            <h3 class="text-xl font-black text-gray-700 flex items-center gap-2"><i data-lucide="utensils" class="w-5 h-5"></i> ほかの候補</h3>
+                            <div class="grid grid-cols-1 gap-4">
+                                ${others.map(item => `
+                                    <div class="bg-white p-6 rounded-[30px] shadow-md border-2 border-gray-50 flex items-center gap-6 hover:shadow-lg transition-all">
+                                        <div class="w-20 h-20 bg-gray-50 rounded-2xl flex items-center justify-center text-4xl shadow-inner">${item.imageEmoji}</div>
+                                        <div class="flex-grow">
+                                            <div class="flex items-center gap-2 mb-1">
+                                                <span class="text-[10px] font-black bg-gray-800 text-white px-3 py-1 rounded-full uppercase">${item.part}</span>
+                                            </div>
+                                            <h4 class="font-black text-gray-900 text-xl">${item.title}</h4>
+                                            <p class="text-xs text-gray-400 font-bold">${item.time} / ${item.calories}</p>
+                                        </div>
+                                        <a href="${item.searchUrl}" target="_blank" class="bg-gray-100 p-4 rounded-full text-gray-400 hover:bg-orange-600 hover:text-white transition-all">
+                                            <i data-lucide="external-link" class="w-6 h-6"></i>
+                                        </a>
+                                    </div>
+                                `).join('')}
+                            </div>
+                        </div>
+                        ` : ''}
+                    </div>
+                `;
+            }
+
+            lucide.createIcons();
+        }
+
+        function setStep(step) {
+            currentStep = step;
+            render();
+            window.scrollTo({ top: 0, behavior: 'smooth' });
+        }
+
+        function selectMood(id) {
+            selectedMood = id;
+            setStep(2);
+        }
+
+        function toggleIngredient(id) {
+            const index = selectedIngredients.indexOf(id);
+            if (index > -1) selectedIngredients.splice(index, 1);
+            else selectedIngredients.push(id);
+            render();
+        }
+
+        function getMatchedRecipes() {
+            return RECIPES.map(recipe => {
+                let score = 0;
+                const matched = recipe.ingredients.filter(i => selectedIngredients.includes(i));
+                if (selectedIngredients.length > 0) {
+                    if (matched.length > 0) score += 5000 + (matched.length * 1000);
+                    else score -= 10000;
+                }
+                if (recipe.moods.includes(selectedMood)) score += 2000;
+                return { ...recipe, score };
+            }).sort((a, b) => b.score - a.score);
+        }
+
+        function showResults() { setStep(3); }
+        function resetApp() { currentStep = 0; selectedMood = null; selectedIngredients = []; render(); }
+
+        window.onload = render;
+    </script>
+</body>
+</html>
