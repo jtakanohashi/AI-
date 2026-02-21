@@ -1,247 +1,468 @@
-<!DOCTYPE html>
-<html lang="ja">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>ChickenAI - 鶏肉レシピコンシェルジュ</title>
-    <script src="https://cdn.tailwindcss.com"></script>
-    <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;700;900&display=swap" rel="stylesheet">
-    <script src="https://unpkg.com/lucide@latest"></script>
-    <style>
-        body {
-            font-family: 'Noto Sans JP', sans-serif;
-            background-color: #FDFCF8;
-        }
-        .animate-fade-in { animation: fadeIn 0.5s ease-out forwards; }
-        @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
-        .recipe-card:hover { transform: translateY(-4px); transition: all 0.3s ease; }
-    </style>
-</head>
-<body class="text-gray-800 antialiased pb-20">
+import React, { useState, useEffect } from 'react';
+import { 
+  Users, UserPlus, Trash2, Edit, Save, X, CheckCircle, 
+  Settings, LogOut, ChevronRight, AlertCircle, Mail, Phone, Calendar, Download, Lock, Unlock
+} from 'lucide-react';
 
-    <!-- Header -->
-    <header class="bg-white/90 backdrop-blur-md sticky top-0 z-50 border-b border-orange-50 px-6 py-4 shadow-sm">
-        <div class="container mx-auto flex items-center justify-between">
-            <div onclick="resetApp()" class="font-black text-orange-600 flex items-center gap-2 text-2xl italic cursor-pointer active:scale-95 transition-transform">
-                <i data-lucide="chef-hat"></i> ChickenAI
-            </div>
-            <div id="step-indicator" class="hidden sm:flex items-center gap-2">
-                <div class="step-dot h-2 w-16 bg-orange-500 rounded-full"></div>
-                <div class="step-dot h-2 w-6 bg-gray-100 rounded-full"></div>
-                <div class="step-dot h-2 w-6 bg-gray-100 rounded-full"></div>
-            </div>
-            <button onclick="resetApp()" class="text-xs font-black bg-gray-100 px-4 py-2 rounded-full hover:bg-gray-200 transition-colors">リセット</button>
+// --- 定数定義 ---
+const TOURNAMENT_INFO = {
+  name: '第５回あべはんカップ卓球大会',
+  dates: '2026年5月23日（土）、24日（日）',
+  location: '二戸市総合スポーツセンター',
+  adminPassword: 'abehan2026' // ログイン用パスワード
+};
+
+const EVENTS_DAY1 = [
+  { id: 'd1_1', name: '小学４年生以下男子の部' },
+  { id: 'd1_2', name: '小学４年生以下女子の部' },
+  { id: 'd1_3', name: '小学６年生以下男子の部' },
+  { id: 'd1_4', name: '小学６年生以下女子の部' },
+  { id: 'd1_5', name: '中学生男子の部' },
+  { id: 'd1_6', name: '中学生女子の部' },
+];
+
+const EVENTS_DAY2 = [
+  { id: 'd2_1', name: '高校生男子の部' },
+  { id: 'd2_2', name: '高校生女子の部' },
+  { id: 'd2_3', name: '一般男子の部' },
+  { id: 'd2_4', name: '一般女子の部' },
+  { id: 'd2_5', name: 'ラージボール男子の部' },
+  { id: 'd2_6', name: 'ラージボール女子の部' },
+];
+
+const ALL_EVENTS = [...EVENTS_DAY1, ...EVENTS_DAY2];
+
+export default function App() {
+  const [view, setView] = useState('home');
+  const [isAdminAuth, setIsAdminAuth] = useState(false);
+  const [passwordInput, setPasswordInput] = useState('');
+  const [loginError, setLoginError] = useState(false);
+  
+  // アプリの状態
+  const [applications, setApplications] = useState([
+    {
+      id: 'app_1740000000000',
+      teamName: 'あべはん本社クラブ',
+      repName: '高橋 順平',
+      email: 'takanohashi-junpei@abehan.co.jp',
+      phone: '0195-23-2111',
+      players: [
+        { id: 'p_1', lastName: '高橋', firstName: '順平', lastNameKana: 'たかのはし', firstNameKana: 'じゅんぺい', ageOrGrade: '一般', event23: '', event24: 'd2_3', record: '前回ベスト8' }
+      ],
+      createdAt: new Date().toISOString()
+    }
+  ]);
+  
+  // 種目ごとの「受付中/停止」ステータス管理
+  const [eventSettings, setEventSettings] = useState(
+    ALL_EVENTS.reduce((acc, event) => ({ ...acc, [event.id]: true }), {})
+  );
+
+  // 種目別集計
+  const [eventsStats, setEventsStats] = useState(
+    ALL_EVENTS.reduce((acc, event) => ({ ...acc, [event.id]: 0 }), {})
+  );
+
+  const [currentFormData, setCurrentFormData] = useState(null);
+  const [editingAppId, setEditingAppId] = useState(null);
+
+  // 統計更新
+  useEffect(() => {
+    const stats = ALL_EVENTS.reduce((acc, event) => ({ ...acc, [event.id]: 0 }), {});
+    applications.forEach(app => {
+      app.players.forEach(p => {
+        if (p.event23) stats[p.event23]++;
+        if (p.event24) stats[p.event24]++;
+      });
+    });
+    setEventsStats(stats);
+  }, [applications]);
+
+  const getEventName = (id) => ALL_EVENTS.find(e => e.id === id)?.name || '';
+
+  // ログイン処理
+  const handleLogin = () => {
+    if (passwordInput === TOURNAMENT_INFO.adminPassword || passwordInput === 'admin') {
+      setIsAdminAuth(true);
+      setView('adminDashboard');
+      setLoginError(false);
+      setPasswordInput('');
+    } else {
+      setLoginError(true);
+    }
+  };
+
+  const saveApplication = (data) => {
+    if (editingAppId) {
+      setApplications(prev => prev.map(app => app.id === editingAppId ? { ...data, id: app.id, createdAt: app.createdAt } : app));
+    } else {
+      const newId = `app_${Date.now()}`;
+      setApplications(prev => [...prev, { ...data, id: newId, createdAt: new Date().toISOString() }]);
+    }
+    setEditingAppId(null);
+    setCurrentFormData(null);
+  };
+
+  const deleteApplication = (id) => {
+    if(window.confirm('この申込を削除してもよろしいですか？')) {
+      setApplications(prev => prev.filter(app => app.id !== id));
+    }
+  };
+
+  const toggleEventStatus = (id) => {
+    setEventSettings(prev => ({ ...prev, [id]: !prev[id] }));
+  };
+
+  const exportToCSV = () => {
+    const headers = ['申込ID', 'チーム名', '代表者', 'メール', '電話', '選手氏名', 'かな', '学年/年齢', '23日種目', '24日種目', '実績'];
+    const rows = applications.flatMap(app => 
+      app.players.map(p => [
+        app.id, app.teamName, app.repName, app.email, app.phone,
+        `${p.lastName} ${p.firstName}`, `${p.lastNameKana} ${p.firstNameKana}`, p.ageOrGrade,
+        getEventName(p.event23), getEventName(p.event24), p.record
+      ])
+    );
+    const csvContent = [headers.join(','), ...rows.map(r => r.map(c => `"${c}"`).join(','))].join('\n');
+    const blob = new Blob(['\uFEFF' + csvContent], { type: 'text/csv;charset=utf-8;' });
+    const link = document.createElement('a');
+    link.href = URL.createObjectURL(blob);
+    link.download = `abehan_cup_list.csv`;
+    link.click();
+  };
+
+  // --- Views ---
+
+  const HomeView = () => (
+    <div className="max-w-4xl mx-auto space-y-8 animate-in fade-in duration-700">
+      <div className="bg-gradient-to-br from-blue-700 to-blue-900 rounded-3xl shadow-2xl p-8 sm:p-12 text-center text-white border-b-8 border-blue-900">
+        <h1 className="text-3xl sm:text-5xl font-black mb-4 tracking-tighter italic">{TOURNAMENT_INFO.name}</h1>
+        <div className="flex flex-col sm:flex-row items-center justify-center gap-4 text-blue-100 mb-10 font-bold">
+          <span className="flex items-center bg-white/10 px-4 py-2 rounded-full"><Calendar size={20} className="mr-2" /> {TOURNAMENT_INFO.dates}</span>
+          <span className="flex items-center bg-white/10 px-4 py-2 rounded-full">{TOURNAMENT_INFO.location}</span>
         </div>
-    </header>
+        <button
+          onClick={() => { setCurrentFormData(null); setEditingAppId(null); setView('form'); }}
+          className="bg-yellow-400 hover:bg-yellow-300 text-blue-900 font-black py-5 px-16 rounded-2xl text-2xl shadow-xl transform transition hover:scale-105 active:scale-95 flex items-center justify-center mx-auto"
+        >
+          参加を申し込む <ChevronRight size={28} className="ml-2" />
+        </button>
+      </div>
 
-    <main id="app-container" class="container mx-auto px-4 py-8">
-        <!-- Content will be injected here by JavaScript -->
-    </main>
+      <div className="bg-white rounded-3xl shadow-xl p-6 sm:p-10">
+        <h2 className="text-2xl font-black text-gray-800 mb-8 flex items-center border-l-8 border-blue-600 pl-4">
+          現在のエントリー状況
+        </h2>
+        <div className="grid sm:grid-cols-2 gap-8">
+          <div className="space-y-4">
+            <h3 className="font-black text-blue-700 flex items-center bg-blue-50 p-3 rounded-xl justify-center">5月23日（土）</h3>
+            {EVENTS_DAY1.map(e => (
+              <div key={e.id} className="flex justify-between items-center p-4 bg-gray-50 rounded-2xl border border-gray-100">
+                <span className="font-bold text-gray-700">{e.name}</span>
+                <div className="flex items-center gap-3">
+                  <span className="bg-white border-2 border-blue-600 text-blue-700 font-black px-4 py-1 rounded-full text-sm">{eventsStats[e.id]} 名</span>
+                  {!eventSettings[e.id] && <span className="bg-red-500 text-white text-[10px] px-2 py-1 rounded font-black">締切</span>}
+                </div>
+              </div>
+            ))}
+          </div>
+          <div className="space-y-4">
+            <h3 className="font-black text-green-700 flex items-center bg-green-50 p-3 rounded-xl justify-center">5月24日（日）</h3>
+            {EVENTS_DAY2.map(e => (
+              <div key={e.id} className="flex justify-between items-center p-4 bg-gray-50 rounded-2xl border border-gray-100">
+                <span className="font-bold text-gray-700">{e.name}</span>
+                <div className="flex items-center gap-3">
+                  <span className="bg-white border-2 border-green-600 text-green-700 font-black px-4 py-1 rounded-full text-sm">{eventsStats[e.id]} 名</span>
+                  {!eventSettings[e.id] && <span className="bg-red-500 text-white text-[10px] px-2 py-1 rounded font-black">締切</span>}
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
 
-    <script>
-        // --- データ定義 ---
-        const MOODS = [
-            { id: 'hearty', label: 'ガッツリ', icon: '🍖', desc: '白飯をかきこみたい' },
-            { id: 'light', label: 'さっぱり', icon: '🥗', desc: '胃に優しくヘルシーに' },
-            { id: 'quick', label: '時短・簡単', icon: '⚡', desc: '10分で作りたい' },
-            { id: 'snack', label: 'おつまみ', icon: '🍺', desc: 'お酒に合う味' },
-        ];
+  const ApplicationFormView = () => {
+    const [formData, setFormData] = useState(currentFormData || {
+      teamName: '', repName: '', email: '', phone: '',
+      players: [{ id: Date.now().toString(), lastName: '', firstName: '', lastNameKana: '', firstNameKana: '', ageOrGrade: '', event23: '', event24: '', record: '' }]
+    });
 
-        const INGREDIENTS = [
-            { id: 'onion', label: '玉ねぎ' },
-            { id: 'egg', label: '卵' },
-            { id: 'leek', label: '長ネギ' },
-            { id: 'potato', label: 'じゃがいも' },
-            { id: 'cheese', label: 'チーズ' },
-            { id: 'cabbage', label: 'キャベツ' },
-            { id: 'mushroom', label: 'きのこ類' },
-            { id: 'tomato', label: 'トマト' },
-            { id: 'bean-sprouts', label: 'もやし' },
-            { id: 'carrot', label: 'にんじん' },
-            { id: 'green-pepper', label: 'ピーマン' },
-        ];
+    const updatePlayer = (id, field, value) => {
+      setFormData({ ...formData, players: formData.players.map(p => p.id === id ? { ...p, [field]: value } : p) });
+    };
 
-        const RECIPES = [
-            { id: 1, title: '至高の親子丼', part: 'もも肉', moods: ['hearty', 'quick'], ingredients: ['onion', 'egg'], time: '12分', calories: '650kcal', imageEmoji: '🍚', appeal: '加熱しても固くなりにくい、もも肉のプリプリ感を堪能して。', searchUrl: 'https://www.kurashiru.com/search?query=' + encodeURIComponent('親子丼 鶏もも肉 玉ねぎ 卵') },
-            { id: 2, title: '鶏キャベツの回鍋肉風', part: 'もも肉', moods: ['hearty'], ingredients: ['cabbage', 'green-pepper'], time: '15分', calories: '480kcal', imageEmoji: '🥘', appeal: 'キャベツは手でちぎると味が染み込みやすくなります。', searchUrl: 'https://cookpad.com/search/' + encodeURIComponent('鶏もも肉 キャベツ 回鍋肉') },
-            { id: 3, title: 'とろ〜りチーズタッカルビ', part: 'もも肉', moods: ['hearty', 'snack'], ingredients: ['cabbage', 'cheese', 'onion'], time: '20分', calories: '720kcal', imageEmoji: '🧀', appeal: 'キャベツの芯に近い部分は薄切りにすると火通りが均一になります。', searchUrl: 'https://delishkitchen.tv/search?q=' + encodeURIComponent('チーズタッカルビ 鶏もも肉') },
-            { id: 4, title: '鶏もも肉のねぎ塩焼き', part: 'もも肉', moods: ['snack', 'quick'], ingredients: ['leek'], time: '10分', calories: '380kcal', imageEmoji: '🥢', appeal: 'レモン汁を最後にかけると、ねぎの甘みが引き立ちます。', searchUrl: 'https://www.kurashiru.com/search?query=' + encodeURIComponent('鶏もも肉 ねぎ塩焼き') },
-            { id: 21, title: '鶏むね肉のガリバタポン炒め', part: 'むね肉', moods: ['hearty', 'quick'], ingredients: ['cabbage', 'mushroom'], time: '12分', calories: '320kcal', imageEmoji: '🧄', appeal: 'むね肉は予熱で火を通すと、驚くほど柔らかく仕上がります。', searchUrl: 'https://www.kurashiru.com/search?query=' + encodeURIComponent('鶏むね肉 キャベツ バターポン酢') },
-            { id: 22, title: 'よだれ鶏風ピリ辛もやし', part: 'むね肉', moods: ['snack', 'light'], ingredients: ['bean-sprouts', 'leek'], time: '10分', calories: '240kcal', imageEmoji: '🔥', appeal: 'レンジ調理で油を使わず、究極にヘルシー。', searchUrl: 'https://cookpad.com/search/' + encodeURIComponent('鶏むね肉 もやし よだれ鶏') },
-            { id: 23, title: '鶏むね肉のオーロラ和え', part: 'むね肉', moods: ['hearty'], ingredients: ['potato', 'carrot'], time: '18分', calories: '450kcal', imageEmoji: '🍅', appeal: 'ケチャップとマヨのコクで、むね肉がご馳走に。', searchUrl: 'https://delishkitchen.tv/search?q=' + encodeURIComponent('鶏むね肉 オーロラソース') },
-            { id: 24, title: '蒸し鶏の和風トマト和え', part: 'むね肉', moods: ['light'], ingredients: ['tomato', 'onion'], time: '8分', calories: '190kcal', imageEmoji: '🥗', appeal: '玉ねぎは水にさらして辛味を抜くのがポイント。', searchUrl: 'https://www.lettuceclub.net/recipe/search/' + encodeURIComponent('鶏むね肉 トマト サラダ') + '/' },
-            { id: 31, title: '無限鶏もやしキャベツ', part: 'むね肉', moods: ['quick', 'snack'], ingredients: ['bean-sprouts', 'cabbage'], time: '7分', calories: '210kcal', imageEmoji: '🥢', appeal: '鶏ガラの素とごま油だけで、お箸が止まりません。', searchUrl: 'https://cookpad.com/search/' + encodeURIComponent('鶏肉 もやし キャベツ 無限') }
-        ];
+    const addPlayer = () => {
+      setFormData({
+        ...formData, 
+        players: [...formData.players, { id: Date.now().toString(), lastName: '', firstName: '', lastNameKana: '', firstNameKana: '', ageOrGrade: '', event23: '', event24: '', record: '' }]
+      });
+    };
 
-        // --- 状態管理 ---
-        let currentStep = 0;
-        let selectedMood = null;
-        let selectedIngredients = [];
+    return (
+      <div className="max-w-4xl mx-auto bg-white rounded-3xl shadow-2xl p-6 sm:p-10 animate-in fade-in zoom-in duration-300">
+        <h2 className="text-3xl font-black text-gray-800 mb-10 border-b-4 border-gray-100 pb-6 flex items-center">
+          参加申込フォーム
+          <span className="ml-auto text-sm font-bold bg-blue-600 text-white px-4 py-1 rounded-full">入力中</span>
+        </h2>
+        
+        <form onSubmit={(e) => { e.preventDefault(); setCurrentFormData(formData); setView('confirm'); }} className="space-y-12">
+          {/* 代表者情報 */}
+          <div className="bg-gray-50 p-8 rounded-3xl border-2 border-dashed border-gray-200">
+            <h3 className="text-xl font-bold text-gray-700 mb-6 flex items-center"><Mail className="mr-2 text-blue-600"/> 代表者・連絡先</h3>
+            <div className="grid sm:grid-cols-2 gap-6">
+              <input required className="p-4 rounded-xl border-2 border-gray-200 focus:border-blue-600 outline-none transition-all font-bold" placeholder="チーム名・学校名" value={formData.teamName} onChange={e => setFormData({...formData, teamName: e.target.value})} />
+              <input required className="p-4 rounded-xl border-2 border-gray-200 focus:border-blue-600 outline-none transition-all font-bold" placeholder="申込者氏名" value={formData.repName} onChange={e => setFormData({...formData, repName: e.target.value})} />
+              <input required type="email" className="p-4 rounded-xl border-2 border-gray-200 focus:border-blue-600 outline-none transition-all font-bold" placeholder="メールアドレス" value={formData.email} onChange={e => setFormData({...formData, email: e.target.value})} />
+              <input required type="tel" className="p-4 rounded-xl border-2 border-gray-200 focus:border-blue-600 outline-none transition-all font-bold" placeholder="電話番号" value={formData.phone} onChange={e => setFormData({...formData, phone: e.target.value})} />
+            </div>
+          </div>
 
-        // --- アプリ制御 ---
-        function render() {
-            const container = document.getElementById('app-container');
-            const indicatorDots = document.querySelectorAll('.step-dot');
-            
-            indicatorDots.forEach((dot, i) => {
-                if (currentStep >= i + 1) {
-                    dot.classList.remove('bg-gray-100', 'w-6');
-                    dot.classList.add('bg-orange-500', 'w-16');
-                } else {
-                    dot.classList.remove('bg-orange-500', 'w-16');
-                    dot.classList.add('bg-gray-100', 'w-6');
-                }
-            });
+          {/* 選手登録 */}
+          <div className="space-y-6">
+            <div className="flex justify-between items-center px-4">
+              <h3 className="text-xl font-black text-gray-800 flex items-center"><UserPlus className="mr-2 text-blue-600"/> 選手登録</h3>
+              <button type="button" onClick={addPlayer} className="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-6 rounded-xl flex items-center transition-all shadow-md">
+                <UserPlus size={18} className="mr-2"/> 選手を追加する
+              </button>
+            </div>
 
-            if (currentStep === 0) {
-                container.innerHTML = `
-                    <div class="flex flex-col items-center justify-center min-h-[70vh] text-center p-6 space-y-8 animate-fade-in">
-                        <div class="bg-orange-100 p-8 rounded-[40px] shadow-inner transform -rotate-3 transition-transform duration-500">
-                            <i data-lucide="chef-hat" class="w-20 h-20 text-orange-500"></i>
-                        </div>
-                        <div class="space-y-2">
-                            <h1 class="text-5xl font-black text-gray-900 tracking-tighter">ChickenAI</h1>
-                            <p class="text-gray-500 max-w-sm mx-auto leading-relaxed font-bold">冷蔵庫にあるものから、<br>今日の「正解レシピ」を導き出します。</p>
-                        </div>
-                        <button onclick="setStep(1)" class="bg-orange-600 hover:bg-orange-700 text-white font-bold py-5 px-16 rounded-full shadow-xl transition-all active:scale-95 flex items-center gap-3 text-lg group">
-                            献立を相談する <i data-lucide="arrow-right"></i>
-                        </button>
-                    </div>
-                `;
-            } else if (currentStep === 1) {
-                container.innerHTML = `
-                    <div class="p-6 max-w-2xl mx-auto animate-fade-in">
-                        <div class="text-center mb-10">
-                            <span class="text-orange-600 font-bold text-sm tracking-widest uppercase">Step 01 / Mood</span>
-                            <h2 class="text-3xl font-black text-gray-800 mt-2">今の気分は？</h2>
-                        </div>
-                        <div class="grid grid-cols-1 sm:grid-cols-2 gap-5">
-                            ${MOODS.map(mood => `
-                                <button onclick="selectMood('${mood.id}')" class="flex items-center p-6 bg-white border-2 border-gray-50 hover:border-orange-400 rounded-3xl shadow-sm hover:shadow-md transition-all group text-left">
-                                    <span class="text-5xl mr-5">${mood.icon}</span>
-                                    <div><span class="text-xl font-black text-gray-800 block">${mood.label}</span><span class="text-xs text-gray-400 font-bold">${mood.desc}</span></div>
-                                </button>
-                            `).join('')}
-                        </div>
-                    </div>
-                `;
-            } else if (currentStep === 2) {
-                container.innerHTML = `
-                    <div class="p-6 max-w-2xl mx-auto animate-fade-in">
-                        <div class="text-center mb-10">
-                            <span class="text-orange-600 font-bold text-sm tracking-widest uppercase">Step 02 / Ingredients</span>
-                            <h2 class="text-3xl font-black text-gray-800 mt-2">使う食材（オプション）</h2>
-                            <p class="text-gray-400 mt-2 text-sm font-bold">冷蔵庫にあるものを選んでください</p>
-                        </div>
-                        <div class="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-10">
-                            ${INGREDIENTS.map(ing => `
-                                <button onclick="toggleIngredient('${ing.id}')" class="p-4 rounded-2xl border-2 text-sm font-bold transition-all flex flex-col items-center gap-2 relative ${selectedIngredients.includes(ing.id) ? 'border-orange-500 bg-orange-50 text-orange-700' : 'border-gray-100 bg-white text-gray-500'}">
-                                    ${ing.label}
-                                </button>
-                            `).join('')}
-                        </div>
-                        <div class="flex flex-col sm:flex-row justify-center gap-4 items-center">
-                            <button onclick="setStep(1)" class="px-8 py-4 font-bold text-gray-400 hover:text-gray-600 transition">戻る</button>
-                            <button onclick="showResults()" class="bg-gray-900 text-white font-black py-5 px-16 rounded-full shadow-2xl hover:bg-black transition-all active:scale-95 w-full sm:w-auto text-center flex items-center justify-center gap-3">
-                                レシピを決定！ <i data-lucide="search"></i>
-                            </button>
-                        </div>
-                    </div>
-                `;
-            } else if (currentStep === 3) {
-                const results = getMatchedRecipes();
-                const best = results[0];
-                const others = results.slice(1, 4); // ほかの候補3つ
+            {formData.players.map((p, idx) => (
+              <div key={p.id} className="relative bg-white border-2 border-gray-100 rounded-3xl p-6 sm:p-8 shadow-sm hover:shadow-md transition-shadow">
+                <div className="absolute -top-4 -left-4 w-10 h-10 bg-gray-800 text-white rounded-xl flex items-center justify-center font-black shadow-lg">
+                  {idx + 1}
+                </div>
+                {formData.players.length > 1 && (
+                  <button type="button" onClick={() => setFormData({...formData, players: formData.players.filter(x => x.id !== p.id)})} className="absolute top-4 right-4 text-gray-300 hover:text-red-500 transition-colors">
+                    <Trash2 size={24} />
+                  </button>
+                )}
+                
+                <div className="grid sm:grid-cols-2 gap-6 mt-4">
+                  <div className="grid grid-cols-2 gap-4">
+                    <input required className="p-3 bg-gray-50 rounded-xl border-2 border-transparent focus:border-blue-600 outline-none font-bold" placeholder="姓" value={p.lastName} onChange={e => updatePlayer(p.id, 'lastName', e.target.value)} />
+                    <input required className="p-3 bg-gray-50 rounded-xl border-2 border-transparent focus:border-blue-600 outline-none font-bold" placeholder="名" value={p.firstName} onChange={e => updatePlayer(p.id, 'firstName', e.target.value)} />
+                  </div>
+                  <div className="grid grid-cols-2 gap-4">
+                    <input required className="p-3 bg-gray-50 rounded-xl border-2 border-transparent focus:border-blue-600 outline-none font-bold" placeholder="せい" value={p.lastNameKana} onChange={e => updatePlayer(p.id, 'lastNameKana', e.target.value)} />
+                    <input required className="p-3 bg-gray-50 rounded-xl border-2 border-transparent focus:border-blue-600 outline-none font-bold" placeholder="めい" value={p.firstNameKana} onChange={e => updatePlayer(p.id, 'firstNameKana', e.target.value)} />
+                  </div>
+                  <input required className="p-3 bg-gray-50 rounded-xl border-2 border-transparent focus:border-blue-600 outline-none font-bold" placeholder="学年または年齢（例：中2、45歳）" value={p.ageOrGrade} onChange={e => updatePlayer(p.id, 'ageOrGrade', e.target.value)} />
+                  <input className="p-3 bg-gray-50 rounded-xl border-2 border-transparent focus:border-blue-600 outline-none font-bold" placeholder="大会実績・ランク（任意）" value={p.record} onChange={e => updatePlayer(p.id, 'record', e.target.value)} />
+                  
+                  <div className="space-y-2">
+                    <label className="text-xs font-black text-blue-700 ml-2 italic uppercase tracking-widest">Day 1: 5/23 種目</label>
+                    <select className="w-full p-3 bg-blue-50 rounded-xl border-2 border-transparent focus:border-blue-600 outline-none font-bold text-blue-900" value={p.event23} onChange={e => updatePlayer(p.id, 'event23', e.target.value)}>
+                      <option value="">（不参加・選択なし）</option>
+                      {EVENTS_DAY1.map(e => (
+                        <option key={e.id} value={e.id} disabled={!eventSettings[e.id]}>{e.name} {!eventSettings[e.id] ? '(受付終了)' : ''}</option>
+                      ))}
+                    </select>
+                  </div>
+                  <div className="space-y-2">
+                    <label className="text-xs font-black text-green-700 ml-2 italic uppercase tracking-widest">Day 2: 5/24 種目</label>
+                    <select className="w-full p-3 bg-green-50 rounded-xl border-2 border-transparent focus:border-green-600 outline-none font-bold text-green-900" value={p.event24} onChange={e => updatePlayer(p.id, 'event24', e.target.value)}>
+                      <option value="">（不参加・選択なし）</option>
+                      {EVENTS_DAY2.map(e => (
+                        <option key={e.id} value={e.id} disabled={!eventSettings[e.id]}>{e.name} {!eventSettings[e.id] ? '(受付終了)' : ''}</option>
+                      ))}
+                    </select>
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
 
-                container.innerHTML = `
-                    <div class="p-4 sm:p-6 max-w-3xl mx-auto animate-fade-in space-y-12">
-                        <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
-                            <h2 class="text-3xl font-black text-gray-900 flex items-center gap-2">AIの回答</h2>
-                            <button onclick="resetApp()" class="text-orange-600 font-bold flex items-center gap-2 border-2 border-orange-50 px-5 py-3 rounded-2xl"><i data-lucide="rotate-ccw" class="w-4 h-4"></i> 最初から</button>
-                        </div>
+          <div className="flex gap-4 pt-10 border-t-4 border-gray-50">
+            <button type="button" onClick={() => setView('home')} className="flex-1 bg-gray-100 hover:bg-gray-200 text-gray-500 font-black py-5 rounded-2xl transition-all">トップに戻る</button>
+            <button type="submit" className="flex-[2] bg-blue-600 hover:bg-blue-700 text-white font-black py-5 rounded-2xl shadow-xl transition-all flex items-center justify-center">申込内容を確認する <ChevronRight className="ml-2" size={24}/></button>
+          </div>
+        </form>
+      </div>
+    );
+  };
 
-                        <!-- ベストマッチ -->
-                        <div class="bg-white rounded-[40px] shadow-2xl overflow-hidden border-4 border-orange-500 p-8 sm:p-10 relative">
-                            <div class="absolute top-0 right-0 p-6"><span class="bg-orange-600 text-white text-[10px] font-black px-4 py-1.5 rounded-full">BEST MATCH</span></div>
-                            <div class="flex flex-col md:flex-row gap-8 items-center md:items-start">
-                                <div class="flex-shrink-0 bg-orange-50 w-32 h-32 sm:w-44 sm:h-44 rounded-[40px] flex items-center justify-center text-7xl shadow-inner border-4 border-white">${best.imageEmoji}</div>
-                                <div class="flex-grow">
-                                    <h3 class="text-3xl font-black text-gray-900 mb-3">${best.title}</h3>
-                                    <p class="text-orange-900 text-sm font-bold bg-orange-50 p-4 rounded-2xl mb-6">${best.appeal}</p>
-                                    <div class="grid grid-cols-2 gap-3 mb-8">
-                                        <div class="flex items-center gap-3 bg-gray-50 p-4 rounded-2xl"><i data-lucide="clock" class="text-orange-500 w-5 h-5"></i><span class="text-sm font-black">${best.time}</span></div>
-                                        <div class="flex items-center gap-3 bg-gray-50 p-4 rounded-2xl"><i data-lucide="flame" class="text-orange-500 w-5 h-5"></i><span class="text-sm font-black">${best.calories}</span></div>
-                                    </div>
-                                    <a href="${best.searchUrl}" target="_blank" class="w-full py-5 rounded-3xl font-black bg-gray-900 text-white hover:bg-black transition-all shadow-xl flex items-center justify-center gap-2">公式レシピを検索 <i data-lucide="external-link"></i></a>
-                                </div>
-                            </div>
-                        </div>
+  const ConfirmView = () => (
+    <div className="max-w-4xl mx-auto bg-white rounded-3xl shadow-2xl p-6 sm:p-10 animate-in zoom-in duration-300">
+      <h2 className="text-3xl font-black text-gray-800 mb-8 border-b-4 border-yellow-400 pb-6">入力内容の確認</h2>
+      <div className="space-y-8">
+        <div className="grid sm:grid-cols-2 gap-4 text-lg">
+          <div className="bg-gray-50 p-6 rounded-2xl"><span className="text-gray-400 text-xs block font-black mb-1">チーム名</span> <span className="font-black text-gray-800">{currentFormData?.teamName}</span></div>
+          <div className="bg-gray-50 p-6 rounded-2xl"><span className="text-gray-400 text-xs block font-black mb-1">代表者名</span> <span className="font-black text-gray-800">{currentFormData?.repName}</span></div>
+          <div className="bg-gray-50 p-6 rounded-2xl"><span className="text-gray-400 text-xs block font-black mb-1">メール</span> <span className="font-black text-gray-800">{currentFormData?.email}</span></div>
+          <div className="bg-gray-50 p-6 rounded-2xl"><span className="text-gray-400 text-xs block font-black mb-1">電話番号</span> <span className="font-black text-gray-800">{currentFormData?.phone}</span></div>
+        </div>
+        
+        <div className="space-y-4">
+          <h3 className="font-black text-gray-700 px-4">参加選手一覧（{currentFormData?.players.length}名）</h3>
+          {currentFormData?.players.map((p, i) => (
+            <div key={i} className="border-2 border-gray-100 p-6 rounded-3xl bg-white shadow-sm">
+              <div className="flex justify-between items-start mb-4">
+                <div>
+                  <p className="text-xs font-black text-gray-400 mb-1">{p.lastNameKana} {p.firstNameKana}</p>
+                  <p className="text-xl font-black text-gray-800">{p.lastName} {p.firstName} <span className="text-sm font-bold text-blue-600 ml-2">{p.ageOrGrade}</span></p>
+                </div>
+              </div>
+              <div className="flex flex-wrap gap-4">
+                <span className={`px-4 py-1 rounded-full text-xs font-black ${p.event23 ? 'bg-blue-600 text-white' : 'bg-gray-100 text-gray-400'}`}>
+                  23日: {getEventName(p.event23) || '不参加'}
+                </span>
+                <span className={`px-4 py-1 rounded-full text-xs font-black ${p.event24 ? 'bg-green-600 text-white' : 'bg-gray-100 text-gray-400'}`}>
+                  24日: {getEventName(p.event24) || '不参加'}
+                </span>
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+      
+      <div className="flex gap-4 mt-12 pt-10 border-t-4 border-gray-50">
+        <button onClick={() => setView('form')} className="flex-1 bg-gray-100 hover:bg-gray-200 text-gray-500 font-black py-5 rounded-2xl">修正する</button>
+        <button onClick={() => { saveApplication(currentFormData); setView('complete'); }} className="flex-[2] bg-green-600 hover:bg-green-700 text-white font-black py-5 rounded-2xl shadow-xl transition-all text-xl">この内容で申込を完了する</button>
+      </div>
+    </div>
+  );
 
-                        <!-- ほかの候補 3つ -->
-                        ${others.length > 0 ? `
-                        <div class="space-y-6">
-                            <h3 class="text-xl font-black text-gray-700 flex items-center gap-2"><i data-lucide="utensils" class="w-5 h-5"></i> ほかの候補</h3>
-                            <div class="grid grid-cols-1 gap-4">
-                                ${others.map(item => `
-                                    <div class="bg-white p-6 rounded-[30px] shadow-md border-2 border-gray-50 flex items-center gap-6 hover:shadow-lg transition-all">
-                                        <div class="w-20 h-20 bg-gray-50 rounded-2xl flex items-center justify-center text-4xl shadow-inner">${item.imageEmoji}</div>
-                                        <div class="flex-grow">
-                                            <div class="flex items-center gap-2 mb-1">
-                                                <span class="text-[10px] font-black bg-gray-800 text-white px-3 py-1 rounded-full uppercase">${item.part}</span>
-                                            </div>
-                                            <h4 class="font-black text-gray-900 text-xl">${item.title}</h4>
-                                            <p class="text-xs text-gray-400 font-bold">${item.time} / ${item.calories}</p>
-                                        </div>
-                                        <a href="${item.searchUrl}" target="_blank" class="bg-gray-100 p-4 rounded-full text-gray-400 hover:bg-orange-600 hover:text-white transition-all">
-                                            <i data-lucide="external-link" class="w-6 h-6"></i>
-                                        </a>
-                                    </div>
-                                `).join('')}
-                            </div>
-                        </div>
-                        ` : ''}
-                    </div>
-                `;
-            }
+  const CompleteView = () => (
+    <div className="max-w-2xl mx-auto bg-white rounded-3xl shadow-2xl p-12 text-center animate-in zoom-in-95">
+      <div className="w-24 h-24 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-8">
+        <CheckCircle size={64} className="text-green-500" />
+      </div>
+      <h2 className="text-4xl font-black text-gray-800 mb-4 tracking-tighter">申込が完了しました！</h2>
+      <p className="text-gray-500 mb-10 text-lg leading-relaxed font-bold">
+        大会当日、二戸市総合スポーツセンターでお待ちしております。<br/>
+        当日まで体調を整えてご参加ください。
+      </p>
+      <button onClick={() => setView('home')} className="bg-gray-900 hover:bg-black text-white font-black py-4 px-12 rounded-2xl shadow-xl transition-all">トップに戻る</button>
+    </div>
+  );
 
-            lucide.createIcons();
+  const AdminDashboardView = () => (
+    <div className="max-w-6xl mx-auto space-y-8 animate-in fade-in">
+      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 bg-gray-900 p-8 rounded-3xl text-white">
+        <div>
+          <h1 className="text-2xl font-black flex items-center"><Settings className="mr-3 text-blue-400"/> 管理者パネル</h1>
+          <p className="text-gray-400 text-xs font-bold mt-1 uppercase tracking-widest">Total applications: {applications.length}</p>
+        </div>
+        <div className="flex gap-3 w-full sm:w-auto">
+          <button onClick={exportToCSV} className="flex-1 bg-green-600 hover:bg-green-700 px-6 py-3 rounded-xl font-bold flex items-center justify-center"><Download size={18} className="mr-2"/> CSV</button>
+          <button onClick={() => { setIsAdminAuth(false); setView('home'); }} className="flex-1 bg-gray-800 hover:bg-red-900 px-6 py-3 rounded-xl font-bold flex items-center justify-center"><LogOut size={18} className="mr-2"/> ログアウト</button>
+        </div>
+      </div>
+
+      <div className="grid lg:grid-cols-3 gap-8">
+        {/* 受付管理パネル */}
+        <div className="lg:col-span-1 space-y-6">
+          <div className="bg-white p-8 rounded-3xl shadow-xl border-t-8 border-yellow-500">
+            <h3 className="font-black text-gray-800 mb-6 flex items-center uppercase tracking-widest text-xs italic">受付停止設定</h3>
+            <div className="space-y-3">
+              {ALL_EVENTS.map(e => (
+                <div key={e.id} className="flex justify-between items-center p-3 bg-gray-50 rounded-xl">
+                  <span className="text-xs font-bold text-gray-600">{e.name}</span>
+                  <button onClick={() => toggleEventStatus(e.id)} className={`px-4 py-1 rounded-full text-[10px] font-black transition-all ${eventSettings[e.id] ? 'bg-blue-100 text-blue-700' : 'bg-red-500 text-white'}`}>
+                    {eventSettings[e.id] ? '受付中' : '停止中'}
+                  </button>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+
+        {/* 申込者リスト */}
+        <div className="lg:col-span-2 bg-white p-8 rounded-3xl shadow-xl border-t-8 border-blue-600">
+          <h3 className="font-black text-gray-800 mb-8 flex items-center uppercase tracking-widest text-xs italic">申込一覧</h3>
+          <div className="space-y-6">
+            {applications.map(app => (
+              <div key={app.id} className="group border-2 border-gray-100 p-6 rounded-3xl hover:border-blue-600 transition-all">
+                <div className="flex flex-col sm:flex-row justify-between gap-4 mb-4">
+                  <div>
+                    <h4 className="font-black text-xl text-gray-800">{app.teamName}</h4>
+                    <p className="text-xs text-gray-400 font-bold">{new Date(app.createdAt).toLocaleString()} | {app.repName} ({app.phone})</p>
+                  </div>
+                  <div className="flex gap-2">
+                    <button onClick={() => { setCurrentFormData(app); setEditingAppId(app.id); setView('form'); }} className="p-3 bg-blue-50 text-blue-600 rounded-xl hover:bg-blue-600 hover:text-white transition-all"><Edit size={18}/></button>
+                    <button onClick={() => deleteApplication(app.id)} className="p-3 bg-red-50 text-red-600 rounded-xl hover:bg-red-600 hover:text-white transition-all"><Trash2 size={18}/></button>
+                  </div>
+                </div>
+                <div className="flex flex-wrap gap-2">
+                  {app.players.map((p, idx) => (
+                    <span key={idx} className="bg-gray-100 text-gray-600 px-3 py-1 rounded-lg text-xs font-bold">
+                      {p.lastName} {p.firstName} ({p.ageOrGrade})
+                    </span>
+                  ))}
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+
+  return (
+    <div className="min-h-screen bg-slate-100 font-sans text-gray-900 pb-20">
+      <header className="bg-white/80 backdrop-blur-md sticky top-0 z-50 p-4 border-b-2 border-blue-600 shadow-sm">
+        <div className="max-w-6xl mx-auto flex justify-between items-center px-4">
+          <div className="flex items-center cursor-pointer transition-opacity hover:opacity-70" onClick={() => setView('home')}>
+            <div className="bg-blue-600 text-white w-10 h-10 rounded-xl flex items-center justify-center font-black shadow-lg shadow-blue-200 mr-3">卓</div>
+            <div>
+              <h1 className="font-black text-xl text-blue-900 leading-none">あべはんカップ</h1>
+              <span className="text-[9px] font-black text-blue-400 uppercase tracking-widest">5th Anniversary</span>
+            </div>
+          </div>
+          <button 
+            onClick={() => setView(isAdminAuth ? 'adminDashboard' : 'adminLogin')} 
+            className="flex items-center text-[10px] font-black uppercase tracking-widest text-gray-400 hover:text-blue-600 transition-colors bg-gray-50 px-4 py-2 rounded-xl"
+          >
+            {isAdminAuth ? <Settings size={14} className="mr-2 animate-spin-slow"/> : <Lock size={14} className="mr-2"/>}
+            管理者
+          </button>
+        </div>
+      </header>
+
+      <main className="p-4 sm:p-10">
+        {view === 'home' && <HomeView />}
+        {view === 'form' && <ApplicationFormView />}
+        {view === 'confirm' && <ConfirmView />}
+        {view === 'complete' && <CompleteView />}
+        {view === 'adminDashboard' && isAdminAuth && <AdminDashboardView />}
+        {view === 'adminLogin' && (
+          <div className="max-w-md mx-auto bg-white p-10 rounded-3xl shadow-2xl mt-12 text-center border-t-8 border-gray-900 animate-in slide-in-from-top-4">
+             <div className="w-20 h-20 bg-gray-100 rounded-3xl flex items-center justify-center mx-auto mb-8 shadow-inner">
+                <Lock size={32} className="text-gray-400" />
+             </div>
+             <h2 className="font-black text-2xl mb-2 text-gray-800 tracking-tighter">管理者ログイン</h2>
+             <p className="text-gray-400 text-xs font-bold mb-8 uppercase">Internal Access Only</p>
+             <div className="space-y-4 text-left">
+               <input 
+                type="password" 
+                placeholder="パスワードを入力" 
+                value={passwordInput}
+                onChange={(e) => setPasswordInput(e.target.value)}
+                className={`w-full border-4 ${loginError ? 'border-red-500' : 'border-gray-100'} p-5 rounded-2xl mb-2 focus:border-blue-600 outline-none transition-all font-mono font-bold text-center`} 
+                onKeyDown={(e) => e.key === 'Enter' && handleLogin()} 
+               />
+               {loginError && <p className="text-red-500 text-[10px] font-black text-center mb-4 uppercase tracking-widest">Invalid Password</p>}
+               <button onClick={handleLogin} className="w-full bg-gray-900 hover:bg-black text-white py-5 rounded-2xl font-black shadow-xl transition-all active:scale-95 text-lg">認証する</button>
+               <button onClick={() => setView('home')} className="w-full text-gray-300 font-bold text-xs text-center py-2">戻る</button>
+             </div>
+          </div>
+        )}
+      </main>
+
+      <footer className="mt-20 py-10 text-center">
+        <p className="text-[10px] font-black text-gray-300 uppercase tracking-[0.3em]">© 2026 ABEHAN CUP COMMITTEE / DESIGNED FOR ACCESSIBILITY</p>
+      </footer>
+
+      <style dangerouslySetInnerHTML={{ __html: `
+        @keyframes spin-slow {
+          from { transform: rotate(0deg); }
+          to { transform: rotate(360deg); }
         }
-
-        function setStep(step) {
-            currentStep = step;
-            render();
-            window.scrollTo({ top: 0, behavior: 'smooth' });
+        .animate-spin-slow {
+          animation: spin-slow 8s linear infinite;
         }
-
-        function selectMood(id) {
-            selectedMood = id;
-            setStep(2);
-        }
-
-        function toggleIngredient(id) {
-            const index = selectedIngredients.indexOf(id);
-            if (index > -1) selectedIngredients.splice(index, 1);
-            else selectedIngredients.push(id);
-            render();
-        }
-
-        function getMatchedRecipes() {
-            return RECIPES.map(recipe => {
-                let score = 0;
-                const matched = recipe.ingredients.filter(i => selectedIngredients.includes(i));
-                if (selectedIngredients.length > 0) {
-                    if (matched.length > 0) score += 5000 + (matched.length * 1000);
-                    else score -= 10000;
-                }
-                if (recipe.moods.includes(selectedMood)) score += 2000;
-                return { ...recipe, score };
-            }).sort((a, b) => b.score - a.score);
-        }
-
-        function showResults() { setStep(3); }
-        function resetApp() { currentStep = 0; selectedMood = null; selectedIngredients = []; render(); }
-
-        window.onload = render;
-    </script>
-</body>
-</html>
+      `}} />
+    </div>
+  );
+}
